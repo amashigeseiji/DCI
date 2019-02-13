@@ -4,11 +4,10 @@ declare(strict_types=1);
 namespace App\DCI;
 
 use ReflectionClass;
+use ReflectionParameter;
 
 /**
  * ObjectCreator
- *
- * @final
  *
  * This class make dynamic object.
  * Object combined with interface and trait.
@@ -26,9 +25,7 @@ use ReflectionClass;
 final class ObjectCreator
 {
     private const TEMPLATE = <<<TEMPLATE
-class({{ARGUMENTS}})
-  extends {{PARENT_CLASS}}
-  {{INTERFACES}}
+class({{ARGUMENTS}}) extends {{PARENT_CLASS}} {{INTERFACES}}
 {
     {{TRAIT}}
 }
@@ -38,22 +35,25 @@ TEMPLATE;
     private $reflection;
     private $interfaces = [];
     private $traits = [];
-    private $constructorArguments;
 
     /**
      * __construct
      *
      * @param string $parent
-     * @param array $methodLessRoles
-     * @param array $methodFullRoles
+     * @param array $interfaces
+     * @param array $traits
      * @return void
      */
-    private function __construct(string $parent, array $methodLessRoles = [], array $methodFullRoles = [])
+    private function __construct(string $parent, array $interfaces = [], array $traits = [])
     {
         $this->parent = $parent;
-        $this->interfaces = $methodLessRoles;
-        $this->traits = $methodFullRoles;
-        $this->reflection = new \ReflectionClass($parent);
+        foreach ($interfaces as $interface) {
+            $this->actAs($interface);
+        }
+        foreach ($traits as $trait) {
+            $this->use($trait);
+        }
+        $this->reflection = new ReflectionClass($parent);
     }
 
     /**
@@ -71,8 +71,8 @@ TEMPLATE;
                 '{{ARGUMENTS}}'
             ],
             [
-                $this->getMethodFullRolesString(),
-                $this->getMethodLessRolesString(),
+                $this->getTraitString(),
+                $this->getInterfaceString(),
                 $this->parent,
                 $this->getConstructorArgumentsString()
             ],
@@ -86,8 +86,12 @@ TEMPLATE;
      * @param string $interface
      * @return self
      */
-    public function actAs(string $interface): self
+    private function actAs(string $interface): self
     {
+        if (!interface_exists($interface)) {
+            //todo
+            throw new \Exception($interface . ' is not defined as interface.');
+        }
         $this->interfaces[] = $interface;
         return $this;
     }
@@ -98,8 +102,12 @@ TEMPLATE;
      * @param string $trait
      * @return self
      */
-    public function use(string $trait): self
+    private function use(string $trait): self
     {
+        if (!trait_exists($trait)) {
+            //todo
+            throw new \Exception($trait . ' is not defined as trait.');
+        }
         $this->traits[] = $trait;
         return $this;
     }
@@ -126,7 +134,7 @@ TEMPLATE;
     private function constructorArguments(array $args): array
     {
         return array_combine(
-            array_map(function ($arg) {
+            array_map(function (ReflectionParameter $arg) {
                 return $arg->name;
             }, $this->getConstructorParameters()),
             $args
@@ -148,11 +156,11 @@ TEMPLATE;
     }
 
     /**
-     * getMethodFullRolesString
+     * getTraitString
      *
      * @return string
      */
-    private function getMethodFullRolesString(): string
+    private function getTraitString(): string
     {
         $methodFullRoles = '';
         foreach ($this->traits as $trait) {
@@ -162,11 +170,11 @@ TEMPLATE;
     }
 
     /**
-     * getMethodLessRolesString
+     * getInterfaceString
      *
      * @return string
      */
-    private function getMethodLessRolesString(): string
+    private function getInterfaceString(): string
     {
         return $this->interfaces ? 'implements ' . implode(',', $this->interfaces) : '';
     }
