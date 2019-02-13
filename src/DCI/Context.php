@@ -17,4 +17,7 @@ abstract class Context
         }
         throw new \Exception();
     }
+
+    abstract static public function load(): Context;
+    abstract public function interact(): Feedback;
 }
