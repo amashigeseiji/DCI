@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App\DCI;
 
+use ReflectionClass;
+
 /**
  * ObjectCreator
  *
@@ -32,20 +34,74 @@ class({{ARGUMENTS}})
 }
 TEMPLATE;
 
-    private $class;
+    private $parent;
+    private $reflection;
+    private $interfaces = [];
+    private $traits = [];
     private $constructorArguments;
 
     /**
      * __construct
      *
-     * @param string $classString
-     * @param array $constructorArguments
+     * @param string $parent
+     * @param array $methodLessRoles
+     * @param array $methodFullRoles
      * @return void
      */
-    private function __construct(string $classString, array $constructorArguments = [])
+    private function __construct(string $parent, array $methodLessRoles = [], array $methodFullRoles = [])
     {
-        $this->class = $classString;
-        $this->constructorArguments = $constructorArguments;
+        $this->parent = $parent;
+        $this->interfaces = $methodLessRoles;
+        $this->traits = $methodFullRoles;
+        $this->reflection = new \ReflectionClass($parent);
+    }
+
+    /**
+     * getTemplate
+     *
+     * @return string
+     */
+    private function getTemplate(): string
+    {
+        return str_replace(
+            [
+                '{{TRAIT}}',
+                '{{INTERFACES}}',
+                '{{PARENT_CLASS}}',
+                '{{ARGUMENTS}}'
+            ],
+            [
+                $this->getMethodFullRolesString(),
+                $this->getMethodLessRolesString(),
+                $this->parent,
+                $this->getConstructorArgumentsString()
+            ],
+            self::TEMPLATE
+        );
+    }
+
+    /**
+     * actAs
+     *
+     * @param string $interface
+     * @return self
+     */
+    public function actAs(string $interface): self
+    {
+        $this->interfaces[] = $interface;
+        return $this;
+    }
+
+    /**
+     * use
+     *
+     * @param string $trait
+     * @return self
+     */
+    public function use(string $trait): self
+    {
+        $this->traits[] = $trait;
+        return $this;
     }
 
     /**
@@ -57,7 +113,7 @@ TEMPLATE;
     public function construct(...$args)
     {
         extract($this->constructorArguments($args));
-        eval("\$object = new {$this->class};");
+        eval("\$object = new " . $this->getTemplate() . ";");
         return $object;
     }
 
@@ -71,8 +127,8 @@ TEMPLATE;
     {
         return array_combine(
             array_map(function ($arg) {
-                return ltrim($arg, '$');
-            }, $this->constructorArguments),
+                return $arg->name;
+            }, $this->getConstructorParameters()),
             $args
         );
     }
@@ -88,28 +144,55 @@ TEMPLATE;
      */
     public static function make(string $parent, array $interfaces = [], array $traits = []): self
     {
+        return new self($parent, $interfaces, $traits);
+    }
+
+    /**
+     * getMethodFullRolesString
+     *
+     * @return string
+     */
+    private function getMethodFullRolesString(): string
+    {
         $methodFullRoles = '';
-        foreach ($traits as $trait) {
+        foreach ($this->traits as $trait) {
             $methodFullRoles .= "use {$trait};".PHP_EOL;
         }
-        $methodLessRoles = $interfaces ? 'implements ' . implode(',', $interfaces) : '';
+        return $methodFullRoles;
+    }
 
+    /**
+     * getMethodLessRolesString
+     *
+     * @return string
+     */
+    private function getMethodLessRolesString(): string
+    {
+        return $this->interfaces ? 'implements ' . implode(',', $this->interfaces) : '';
+    }
+
+    /**
+     * getConstructorArgumentsString
+     *
+     * @return string
+     */
+    private function getConstructorArgumentsString(): string
+    {
         $constructorArguments = [];
-        $reflection = new \ReflectionClass($parent);
-        $constructor = $reflection->getConstructor();
-        if ($constructor) {
-            foreach ($constructor->getParameters() as $param) {
-                $constructorArguments[] = "\$" . $param->name;
-            }
+        foreach ($this->getConstructorParameters() as $param) {
+            $constructorArguments[] = "\$" . $param->name;
         }
-        $args = implode(',', $constructorArguments);
+        return implode(',', $constructorArguments);
+    }
 
-        $classString = str_replace(
-            ['{{TRAIT}}', '{{INTERFACES}}', '{{PARENT_CLASS}}', '{{ARGUMENTS}}'],
-            [$methodFullRoles, $methodLessRoles, $parent, $args],
-            self::TEMPLATE
-        );
-
-        return new self($classString, $constructorArguments);
+    /**
+     * getConstructorParameters
+     *
+     * @return ReflectionParameter[]
+     */
+    private function getConstructorParameters(): array
+    {
+        $constructor = $this->reflection->getConstructor();
+        return $constructor ? $constructor->getParameters() : [];
     }
 }
