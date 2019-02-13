@@ -4,7 +4,9 @@ declare(strict_types=1);
 namespace App\DCI;
 
 use ReflectionClass;
+use ReflectionObject;
 use ReflectionParameter;
+use ReflectionMethod;
 
 /**
  * ObjectCreator
@@ -31,115 +33,16 @@ class({{ARGUMENTS}}) extends {{PARENT_CLASS}} {{INTERFACES}}
 }
 TEMPLATE;
 
+    /* @var ReflectionClass */
     private $parent;
-    private $reflection;
+    /* @var string[] */
     private $interfaces = [];
+    /* @var string[] */
     private $traits = [];
-
-    /**
-     * __construct
-     *
-     * @param string $parent
-     * @param array $interfaces
-     * @param array $traits
-     * @return void
-     */
-    private function __construct(string $parent, array $interfaces = [], array $traits = [])
-    {
-        $this->parent = $parent;
-        foreach ($interfaces as $interface) {
-            $this->actAs($interface);
-        }
-        foreach ($traits as $trait) {
-            $this->use($trait);
-        }
-        $this->reflection = new ReflectionClass($parent);
-    }
-
-    /**
-     * getTemplate
-     *
-     * @return string
-     */
-    private function getTemplate(): string
-    {
-        return str_replace(
-            [
-                '{{TRAIT}}',
-                '{{INTERFACES}}',
-                '{{PARENT_CLASS}}',
-                '{{ARGUMENTS}}'
-            ],
-            [
-                $this->getTraitString(),
-                $this->getInterfaceString(),
-                $this->parent,
-                $this->getConstructorArgumentsString()
-            ],
-            self::TEMPLATE
-        );
-    }
-
-    /**
-     * actAs
-     *
-     * @param string $interface
-     * @return self
-     */
-    private function actAs(string $interface): self
-    {
-        if (!interface_exists($interface)) {
-            //todo
-            throw new \Exception($interface . ' is not defined as interface.');
-        }
-        $this->interfaces[] = $interface;
-        return $this;
-    }
-
-    /**
-     * use
-     *
-     * @param string $trait
-     * @return self
-     */
-    private function use(string $trait): self
-    {
-        if (!trait_exists($trait)) {
-            //todo
-            throw new \Exception($trait . ' is not defined as trait.');
-        }
-        $this->traits[] = $trait;
-        return $this;
-    }
-
-    /**
-     * construct
-     *
-     * @param array $args
-     * @return object
-     */
-    public function construct(...$args)
-    {
-        extract($this->constructorArguments($args));
-        eval("\$object = new " . $this->getTemplate() . ";");
-        return $object;
-    }
-
-    /**
-     * constructorArguments
-     *
-     * @param array $args
-     * @return array
-     */
-    private function constructorArguments(array $args): array
-    {
-        return array_combine(
-            array_map(function (ReflectionParameter $arg) {
-                return $arg->name;
-            }, $this->getConstructorParameters()),
-            $args
-        );
-    }
+    /* @var self[] */
+    private static $classes = [];
+    /* @var ReflectionObject */
+    private $object;
 
     /**
      * Make instance of ObjectCreator
@@ -152,7 +55,89 @@ TEMPLATE;
      */
     public static function make(string $parent, array $interfaces = [], array $traits = []): self
     {
-        return new self($parent, $interfaces, $traits);
+        $hash = md5($parent . var_export($interfaces, true) . var_export($traits, true));
+        if (!isset(self::$classes[$hash])) {
+            self::$classes[$hash] = new self($parent, $interfaces, $traits);
+        }
+        return self::$classes[$hash];
+    }
+
+    /**
+     * __construct
+     *
+     * @param string $parent
+     * @param array $interfaces
+     * @param array $traits
+     * @return void
+     */
+    private function __construct(string $parent, array $interfaces = [], array $traits = [])
+    {
+        $this->parent = new ReflectionClass($parent);
+        foreach ($interfaces as $interface) {
+            if (!interface_exists($interface)) {
+                //todo
+                throw new \Exception($interface . ' is not defined as interface.');
+            }
+            $this->interfaces[] = $interface;
+        }
+        foreach ($traits as $trait) {
+            if (!trait_exists($trait)) {
+                //todo
+                throw new \Exception($trait . ' is not defined as trait.');
+            }
+            $this->traits[] = $trait;
+        }
+    }
+
+    /**
+     * construct
+     *
+     * @param array $args
+     * @return object
+     */
+    public function construct(...$args)
+    {
+        if (!$this->object) {
+            extract($this->constructorArguments($args));
+            $this->object = new ReflectionObject(eval("return new " . $this->getTemplate() . ";"));
+        }
+        return $this->object->newInstanceArgs($args);
+    }
+
+    /**
+     * constructorArguments
+     *
+     * @param array $args
+     * @return array
+     */
+    private function constructorArguments(array $args): array
+    {
+        $constructor = $this->parent->getConstructor();
+        if (!$constructor) {
+            return [];
+        }
+        return array_combine(
+            array_map(function (ReflectionParameter $arg) {
+                return $arg->name;
+            }, $constructor->getParameters()),
+            $args
+        );
+    }
+
+    /**
+     * getTemplate
+     *
+     * @return string
+     */
+    private function getTemplate(): string
+    {
+        $replace = [
+            '{{TRAIT}}' => self::getTraitString($this->traits),
+            '{{INTERFACES}}' => self::getInterfaceString($this->interfaces),
+            '{{PARENT_CLASS}}' => $this->parent->name,
+            '{{ARGUMENTS}}' => self::getConstructorArgumentsString($this->parent->getConstructor()),
+        ];
+        return str_replace(array_keys($replace), array_values($replace), self::TEMPLATE);
     }
 
     /**
@@ -160,10 +145,10 @@ TEMPLATE;
      *
      * @return string
      */
-    private function getTraitString(): string
+    private static function getTraitString(array $traits): string
     {
         $methodFullRoles = '';
-        foreach ($this->traits as $trait) {
+        foreach ($traits as $trait) {
             $methodFullRoles .= "use {$trait};".PHP_EOL;
         }
         return $methodFullRoles;
@@ -174,9 +159,9 @@ TEMPLATE;
      *
      * @return string
      */
-    private function getInterfaceString(): string
+    private static function getInterfaceString(array $interfaces): string
     {
-        return $this->interfaces ? 'implements ' . implode(',', $this->interfaces) : '';
+        return $interfaces ? 'implements ' . implode(',', $interfaces) : '';
     }
 
     /**
@@ -184,23 +169,15 @@ TEMPLATE;
      *
      * @return string
      */
-    private function getConstructorArgumentsString(): string
+    private static function getConstructorArgumentsString(?ReflectionMethod $constructor): string
     {
+        if (!$constructor) {
+            return '';
+        }
         $constructorArguments = [];
-        foreach ($this->getConstructorParameters() as $param) {
+        foreach ($constructor->getParameters() as $param) {
             $constructorArguments[] = "\$" . $param->name;
         }
         return implode(',', $constructorArguments);
-    }
-
-    /**
-     * getConstructorParameters
-     *
-     * @return ReflectionParameter[]
-     */
-    private function getConstructorParameters(): array
-    {
-        $constructor = $this->reflection->getConstructor();
-        return $constructor ? $constructor->getParameters() : [];
     }
 }
