@@ -4,7 +4,8 @@ namespace App\Transfer;
 use App\DCI\Context;
 use App\DCI\Feedback;
 use App\Transfer\Currency\Yen;
-use App\Transfer\Feedback as TransferFeedback;
+use App\Transfer\TransferSuccess;
+use App\Transfer\TransferFailed;
 
 final class TransferContext extends Context
 {
@@ -23,19 +24,38 @@ final class TransferContext extends Context
     private $source;
     private $recipient;
 
-    public function __construct()
+    /**
+     * __construct
+     *
+     * @param SourceAccountInterface $source
+     * @param RecipientAccountInterface $recipient
+     * @return void
+     */
+    public function __construct(SourceAccountInterface $source, RecipientAccountInterface $recipient)
     {
-        $this->source = self::make('SOURCE_ACCOUNT')->construct(new Yen(10000));
-        $this->recipient = self::make('RECIPIENT_ACCOUNT')->construct(new Yen(10000));
+        $this->source = $source;
+        $this->recipient = $recipient;
     }
 
+    /**
+     * {@inheritdoc}
+     *
+     * Load a source account and recipient account
+     */
     public static function load(): Context
     {
-        return new self;
+        return new self(
+            self::make('SOURCE_ACCOUNT')->construct(new Yen(10000)),
+            self::make('RECIPIENT_ACCOUNT')->construct(new Yen(10000))
+        );
     }
 
     public function interact(): Feedback
     {
-        return new TransferFeedback($this->source->transferTo($this->recipient, new Yen(100)));
+        if ($this->source->transferTo($this->recipient, new Yen(100))) {
+            return new TransferSuccess;
+        } else {
+            return new TransferFFailed;
+        }
     }
 }

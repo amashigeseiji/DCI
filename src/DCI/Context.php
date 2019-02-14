@@ -18,6 +18,17 @@ abstract class Context
         throw new \Exception();
     }
 
+    /**
+     * load
+     *
+     * @return Context
+     */
     abstract static public function load(): Context;
+
+    /**
+     * interact
+     *
+     * @return Feedback
+     */
     abstract public function interact(): Feedback;
 }
