@@ -3,6 +3,7 @@ namespace App\Transfer;
 
 use App\DCI\Context;
 use App\DCI\Feedback;
+use App\DCI\Action;
 use App\Transfer\Currency\Yen;
 use App\Transfer\TransferSuccess;
 use App\Transfer\TransferFailed;
@@ -15,44 +16,44 @@ final class TransferContext extends Context
         [SourceAccountTrait::class]
     ];
 
-    const RECIPIENT_ACCOUNT = [
+    const DESTINATION_ACCOUNT = [
         Account::class,
-        [RecipientAccountInterface::class],
-        [RecipientAccountTrait::class]
+        [DestinationAccountInterface::class],
+        [DestinationAccountTrait::class]
     ];
 
     private $source;
-    private $recipient;
+    private $destination;
 
     /**
      * __construct
      *
      * @param SourceAccountInterface $source
-     * @param RecipientAccountInterface $recipient
+     * @param DestinationAccountInterface $destination
      * @return void
      */
-    public function __construct(SourceAccountInterface $source, RecipientAccountInterface $recipient)
+    public function __construct(SourceAccountInterface $source, DestinationAccountInterface $destination)
     {
         $this->source = $source;
-        $this->recipient = $recipient;
+        $this->destination = $destination;
     }
 
     /**
      * {@inheritdoc}
      *
-     * Load a source account and recipient account
+     * Load a source account and destination account
      */
     public static function load(): Context
     {
         return new self(
             self::make('SOURCE_ACCOUNT')->construct(new Yen(10000)),
-            self::make('RECIPIENT_ACCOUNT')->construct(new Yen(10000))
+            self::make('DESTINATION_ACCOUNT')->construct(new Yen(10000))
         );
     }
 
-    public function interact(): Feedback
+    public function interact(Action $action): Feedback
     {
-        if ($this->source->transferTo($this->recipient, new Yen(100))) {
+        if ($this->source->transferTo($this->destination, new Yen(100))) {
             return new TransferSuccess;
         } else {
             return new TransferFFailed;

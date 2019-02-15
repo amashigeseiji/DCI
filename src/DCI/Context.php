@@ -28,7 +28,8 @@ abstract class Context
     /**
      * interact
      *
+     * @param Action $action
      * @return Feedback
      */
-    abstract public function interact(): Feedback;
+    abstract public function interact(Action $action): Feedback;
 }

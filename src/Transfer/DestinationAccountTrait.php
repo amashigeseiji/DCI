@@ -3,7 +3,7 @@ namespace App\Transfer;
 
 use App\Transfer\Currency\Currency;
 
-trait RecipientAccountTrait
+trait DestinationAccountTrait
 {
     public function increaceBalance(Currency $currency)
     {

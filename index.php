@@ -2,4 +2,4 @@
 
 require_once('vendor/autoload.php');
 
-(new App\Transfer\TransferInteraction)->doIt();
+(new App\DCI\App)->run();

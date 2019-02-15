@@ -3,7 +3,7 @@ namespace App\Transfer;
 
 use App\Transfer\Currency\Currency;
 
-interface RecipientAccountInterface
+interface DestinationAccountInterface
 {
     public function increaceBalance(Currency $currency);
 }
