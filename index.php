@@ -2,4 +2,4 @@
 
 require_once('vendor/autoload.php');
 
-(new App\DCI\App)->run();
+(new App\Transfer\App)->run();

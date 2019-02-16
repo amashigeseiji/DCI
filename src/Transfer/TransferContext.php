@@ -1,14 +1,10 @@
 <?php
 namespace App\Transfer;
 
-use App\DCI\Context;
-use App\DCI\Feedback;
-use App\DCI\Action;
+use App\DCI;
 use App\Transfer\Currency\Yen;
-use App\Transfer\TransferSuccess;
-use App\Transfer\TransferFailed;
 
-final class TransferContext extends Context
+final class TransferContext extends DCI\Context
 {
     const SOURCE_ACCOUNT = [
         Account::class,
@@ -43,7 +39,7 @@ final class TransferContext extends Context
      *
      * Load a source account and destination account
      */
-    public static function load(): Context
+    public static function load(): DCI\Context
     {
         return new self(
             self::make('SOURCE_ACCOUNT')->construct(new Yen(10000)),
@@ -51,12 +47,12 @@ final class TransferContext extends Context
         );
     }
 
-    public function interact(Action $action): Feedback
+    public function interact(DCI\Action $action): DCI\Feedback
     {
         if ($this->source->transferTo($this->destination, new Yen(100))) {
             return new TransferSuccess;
         } else {
-            return new TransferFFailed;
+            return new TransferFailed;
         }
     }
 }

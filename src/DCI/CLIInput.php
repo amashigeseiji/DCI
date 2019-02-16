@@ -5,7 +5,7 @@ final class CLIInput implements Input
 {
     public function get()
     {
-        return $argv;
+        return $_SERVER['argv'];
     }
 
     public function post()
